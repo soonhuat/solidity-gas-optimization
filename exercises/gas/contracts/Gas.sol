@@ -3,19 +3,11 @@ pragma solidity 0.8.0;
 
 import "./Ownable.sol";
 
-contract Constants {
-    uint256 public tradeFlag = 1;
-    uint256 public basicFlag = 0;
-    uint256 public dividendFlag = 1;
-}
-
-contract GasContract is Ownable, Constants {
+contract GasContract is Ownable {
     uint256 public totalSupply = 0; // cannot be updated
     uint256 public paymentCounter = 0;
     mapping(address => uint256) public balances;
-    uint256 public tradePercent = 12;
     address public contractOwner;
-    uint256 public tradeMode = 0;
     mapping(address => Payment[]) public payments;
     mapping(address => uint256) public whitelist;
     address[5] public administrators;
@@ -59,14 +51,13 @@ contract GasContract is Ownable, Constants {
     event AddedToWhitelist(address userAddress, uint256 tier);
 
     modifier onlyAdminOrOwner() {
-        address senderOfTx = msg.sender;
-        if (checkForAdmin(senderOfTx)) {
+        if (msg.sender == contractOwner) {
+            _;
+        } else if (checkForAdmin(msg.sender)) {
             require(
-                checkForAdmin(senderOfTx),
+                checkForAdmin(msg.sender),
                 "Gas Contract Only Admin Check-  Caller not admin"
             );
-            _;
-        } else if (senderOfTx == contractOwner) {
             _;
         } else {
             revert(
@@ -75,13 +66,8 @@ contract GasContract is Ownable, Constants {
         }
     }
 
-    modifier checkIfWhiteListed(address sender) {
-        address senderOfTx = msg.sender;
-        require(
-            senderOfTx == sender,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
-        );
-        uint256 usersTier = whitelist[senderOfTx];
+    modifier checkIfWhiteListed() {
+        uint256 usersTier = whitelist[msg.sender];
         require(
             usersTier > 0,
             "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
@@ -106,18 +92,13 @@ contract GasContract is Ownable, Constants {
     constructor(address[] memory _admins, uint256 _totalSupply) {
         contractOwner = msg.sender;
         totalSupply = _totalSupply;
+        balances[msg.sender] = totalSupply;
+        emit supplyChanged(msg.sender, totalSupply);
 
         for (uint256 ii = 0; ii < administrators.length; ii++) {
             if (_admins[ii] != address(0)) {
                 administrators[ii] = _admins[ii];
-                if (_admins[ii] == contractOwner) {
-                    balances[contractOwner] = totalSupply;
-                } else {
-                    balances[_admins[ii]] = 0;
-                }
-                if (_admins[ii] == contractOwner) {
-                    emit supplyChanged(_admins[ii], totalSupply);
-                } else if (_admins[ii] != contractOwner) {
+                if (_admins[ii] != msg.sender) {
                     emit supplyChanged(_admins[ii], 0);
                 }
             }
@@ -126,35 +107,28 @@ contract GasContract is Ownable, Constants {
 
     function getPaymentHistory()
         public
-        payable
+        view
         returns (History[] memory paymentHistory_)
     {
         return paymentHistory;
     }
 
-    function checkForAdmin(address _user) public view returns (bool admin_) {
-        bool admin = false;
+    function checkForAdmin(address _user) public view returns (bool) {
         for (uint256 ii = 0; ii < administrators.length; ii++) {
             if (administrators[ii] == _user) {
-                admin = true;
+                return true;
             }
         }
-        return admin;
+        return false;
     }
 
-    function balanceOf(address _user) public view returns (uint256 balance_) {
+    function balanceOf(address _user) public view returns (uint256) {
         uint256 balance = balances[_user];
         return balance;
     }
 
-    function getTradingMode() public view returns (bool mode_) {
-        bool mode = false;
-        if (tradeFlag == 1 || dividendFlag == 1) {
-            mode = true;
-        } else {
-            mode = false;
-        }
-        return mode;
+    function getTradingMode() public pure returns (bool) {
+        return true;
     }
 
     function addHistory(address _updateAddress, bool _tradeMode)
@@ -166,11 +140,7 @@ contract GasContract is Ownable, Constants {
         history.lastUpdate = block.timestamp;
         history.updatedBy = _updateAddress;
         paymentHistory.push(history);
-        bool[] memory status = new bool[](tradePercent);
-        for (uint256 i = 0; i < tradePercent; i++) {
-            status[i] = true;
-        }
-        return ((status[0] == true), _tradeMode);
+        return (true, _tradeMode);
     }
 
     function getPayments(address _user)
@@ -211,11 +181,7 @@ contract GasContract is Ownable, Constants {
         payment.recipientName = _name;
         payment.paymentID = ++paymentCounter;
         payments[senderOfTx].push(payment);
-        bool[] memory status = new bool[](tradePercent);
-        for (uint256 i = 0; i < tradePercent; i++) {
-            status[i] = true;
-        }
-        return (status[0] == true);
+        return true;
     }
 
     function updatePayment(
@@ -293,7 +259,7 @@ contract GasContract is Ownable, Constants {
         address _recipient,
         uint256 _amount,
         ImportantStruct memory _struct
-    ) public checkIfWhiteListed(msg.sender) {
+    ) public checkIfWhiteListed() {
         address senderOfTx = msg.sender;
         require(
             balances[senderOfTx] >= _amount,
@@ -308,13 +274,7 @@ contract GasContract is Ownable, Constants {
         balances[senderOfTx] += whitelist[senderOfTx];
         balances[_recipient] -= whitelist[senderOfTx];
 
-        whiteListStruct[senderOfTx] = ImportantStruct(0, 0, 0);
-        ImportantStruct storage newImportantStruct = whiteListStruct[
-            senderOfTx
-        ];
-        newImportantStruct.valueA = _struct.valueA;
-        newImportantStruct.bigValue = _struct.bigValue;
-        newImportantStruct.valueB = _struct.valueB;
+        whiteListStruct[senderOfTx] = _struct;
         emit WhiteListTransfer(_recipient);
     }
 }
