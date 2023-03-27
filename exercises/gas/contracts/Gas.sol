@@ -24,27 +24,15 @@ contract GasContract {
         whitelist[_user] = _tier;
     }
 
-    function balanceOf(address _user) external view returns (uint256) {
-        return balances[_user];
-    }
-
-    function getTradingMode() external pure returns (bool) {
-        return true;
-    }
-
-    function getPayments(address) external view returns (Payment[] memory) {
-        return payments;
-    }
-
     function transfer(
-        address _recipient,
+        address _user,
         uint256 _amount,
         string calldata
     ) external { 
         balances[msg.sender] -= _amount;
-        balances[_recipient] += _amount;
-        emit Transfer(_recipient, _amount);
+        balances[_user] += _amount;
         payments.push(Payment(1,_amount));
+        emit Transfer(_user, _amount);
     }
 
     function updatePayment(
@@ -53,12 +41,24 @@ contract GasContract {
         uint256 _amount,
         uint256 _type
     ) external {
-        payments[0].paymentType = _type;
-        payments[0].amount = _amount;
+        payments[0] = Payment(_type,_amount);
     }
 
-    function whiteTransfer(address _recipient, uint256 _amount, uint256[3] calldata) external {
-        balances[msg.sender] -= _amount - whitelist[msg.sender];
-        balances[_recipient] += _amount - whitelist[msg.sender];
+    function whiteTransfer(address _user, uint256 _amount, uint256[3] calldata) external {
+        uint answer = _amount - whitelist[msg.sender];
+        balances[msg.sender] -= answer;
+        balances[_user] += answer;
+    }
+
+    function balanceOf(address _user) external view returns (uint256) {
+        return balances[_user];
+    }
+    
+    function getTradingMode() external pure returns (bool) {
+        return true;
+    }
+
+    function getPayments(address) external view returns (Payment[] memory) {
+        return payments;
     }
 }
